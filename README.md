@@ -57,7 +57,10 @@ When everything is installed, the script:
 
 1. **Opens VS Code** — the Claude Code extension loads and shares the login below.
 2. **Opens a fresh Terminal window** that runs the two browser logins for the user:
-   - **Salesforce** (`sf org login web`) — opens the browser to connect their org.
+   - **Salesforce** — first asks which org type they're connecting to
+     (**Production**, **Sandbox**, or **Custom domain** — where they paste their
+     My Domain URL), then opens the browser with the correct endpoint
+     (`sf org login web --instance-url …`).
    - **Claude** (`claude`) — opens the browser to sign in to their account.
 
 The user only has to click through the browser prompts — no commands to type or

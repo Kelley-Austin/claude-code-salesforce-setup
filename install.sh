@@ -25,7 +25,7 @@ set -o pipefail
 # ----------------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------------
-SCRIPT_VERSION="1.1.0"
+SCRIPT_VERSION="1.2.0"
 LOG_FILE="${HOME}/Library/Logs/claude-salesforce-setup.log"
 REQUIRED_MACOS_MAJOR=13   # macOS Ventura or newer
 
@@ -368,12 +368,40 @@ cat <<'TXT'
 ============================================================
    Final step — two quick logins (your browser will open)
 ============================================================
-
 TXT
-echo "1) Connecting your Salesforce org..."
-echo "   A browser window will open — log in to Salesforce, then come back here."
 echo
-sf org login web
+echo "1) Salesforce login"
+echo "   Which kind of org are you connecting to?"
+echo
+echo "     [1] Production / Developer   (login.salesforce.com)"
+echo "     [2] Sandbox                  (test.salesforce.com)"
+echo "     [3] Custom domain / My Domain (you'll paste the URL)"
+echo
+SF_INSTANCE=""
+while true; do
+  printf "   Type 1, 2 or 3 and press Enter: "
+  read -r choice
+  case "$choice" in
+    1) SF_INSTANCE="https://login.salesforce.com"; break ;;
+    2) SF_INSTANCE="https://test.salesforce.com";  break ;;
+    3)
+       echo
+       echo "   Paste your org URL. Examples:"
+       echo "     mycompany.my.salesforce.com"
+       echo "     https://mycompany.sandbox.my.salesforce.com"
+       printf "   URL: "
+       read -r url
+       case "$url" in
+         http://*|https://*) : ;;
+         *) url="https://$url" ;;
+       esac
+       SF_INSTANCE="$url"; break ;;
+    *) echo "   Please type 1, 2 or 3." ;;
+  esac
+done
+echo
+echo "   Opening the browser to log in to Salesforce..."
+sf org login web --instance-url "$SF_INSTANCE" --set-default
 echo
 echo "------------------------------------------------------------"
 echo "2) Signing in to Claude..."
