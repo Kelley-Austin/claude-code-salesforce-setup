@@ -25,7 +25,7 @@ set -o pipefail
 # ----------------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------------
-SCRIPT_VERSION="1.0.0"
+SCRIPT_VERSION="1.1.0"
 LOG_FILE="${HOME}/Library/Logs/claude-salesforce-setup.log"
 REQUIRED_MACOS_MAJOR=13   # macOS Ventura or newer
 
@@ -340,6 +340,61 @@ install_extensions() {
 }
 
 # ----------------------------------------------------------------------------
+# Auto-launch: open VS Code + guide the two browser logins
+# ----------------------------------------------------------------------------
+# The Salesforce and Claude logins both open a browser, but they need a REAL
+# interactive terminal — which a 'curl | bash' pipe doesn't provide. So we drop
+# a small ".command" launcher on the Desktop and open it: macOS runs it in a
+# fresh Terminal window with a proper TTY. Bonus: the file stays on the Desktop
+# as a reusable "redo my logins" button.
+launch_logins_and_vscode() {
+  printf '\n%s\n' "${BOLD}${BLUE}Finishing up — opening VS Code and the login window...${RESET}"
+
+  # 1) Open VS Code so the Claude Code extension loads. It shares the login
+  #    done below, so it ends up signed in automatically.
+  if have code; then
+    code >/dev/null 2>&1 || open -a "Visual Studio Code" >/dev/null 2>&1 || true
+  else
+    open -a "Visual Studio Code" >/dev/null 2>&1 || true
+  fi
+  ok "Visual Studio Code opened."
+
+  # 2) Write and open the interactive login helper.
+  local helper="${HOME}/Desktop/Finish Claude + Salesforce Login.command"
+  cat > "$helper" <<'EOS'
+#!/bin/bash
+clear
+cat <<'TXT'
+============================================================
+   Final step — two quick logins (your browser will open)
+============================================================
+
+TXT
+echo "1) Connecting your Salesforce org..."
+echo "   A browser window will open — log in to Salesforce, then come back here."
+echo
+sf org login web
+echo
+echo "------------------------------------------------------------"
+echo "2) Signing in to Claude..."
+echo "   A browser window will open — approve the login."
+echo "   Claude will then start. You can begin typing, or just close"
+echo "   this window — you're already set up in VS Code."
+echo "------------------------------------------------------------"
+echo
+claude
+EOS
+  chmod +x "$helper"
+  if open "$helper" >/dev/null 2>&1; then
+    ok "A new Terminal window opened to finish the two logins."
+    LOGINS_AUTOLAUNCHED=1
+  else
+    warn "Could not auto-open the login window — do the logins manually (steps below)."
+    LOGINS_AUTOLAUNCHED=0
+  fi
+}
+
+# ----------------------------------------------------------------------------
 # Final summary & next steps
 # ----------------------------------------------------------------------------
 print_next_steps() {
@@ -347,17 +402,19 @@ print_next_steps() {
   printf '%s\n'   "${BOLD}${GREEN}│   All done! Everything is installed. 🎉                │${RESET}"
   printf '%s\n'   "${BOLD}${GREEN}└──────────────────────────────────────────────────────┘${RESET}"
 
-  printf '\n%s\n' "${BOLD}Two quick one-time logins remain (these need YOU):${RESET}"
-  printf '\n%s\n' "${BOLD}1) Sign in to Claude Code${RESET}"
-  printf '%s\n'   "   • Open a ${BOLD}new${RESET} Terminal window and type:  ${CYAN}claude${RESET}"
-  printf '%s\n'   "   • Follow the on-screen login in your browser."
+  if [ "${LOGINS_AUTOLAUNCHED:-0}" = "1" ]; then
+    printf '\n%s\n' "${BOLD}VS Code is open, and a new Terminal window is guiding you through${RESET}"
+    printf '%s\n'   "${BOLD}the two browser logins (Salesforce, then Claude).${RESET}"
+    printf '%s\n'   "Just follow that window. Once Claude is signed in, the VS Code"
+    printf '%s\n'   "extension is signed in too."
+  else
+    printf '\n%s\n' "${BOLD}Two quick one-time logins remain:${RESET}"
+    printf '\n%s\n' "${BOLD}1) Connect your Salesforce org${RESET} — in a new Terminal type:  ${CYAN}sf org login web${RESET}"
+    printf '%s\n'   "${BOLD}2) Sign in to Claude${RESET} — then type:  ${CYAN}claude${RESET}"
+  fi
 
-  printf '\n%s\n' "${BOLD}2) Connect your Salesforce org${RESET}"
-  printf '%s\n'   "   • In the same Terminal type:  ${CYAN}sf org login web${RESET}"
-  printf '%s\n'   "   • Log in to Salesforce in the browser window that opens."
-
-  printf '\n%s\n' "${DIM}Tip: To start working, open VS Code, open your project folder,"
-  printf '%s\n'   "then type 'claude' in the VS Code terminal.${RESET}"
+  printf '\n%s\n' "${DIM}Tip: a \"Finish Claude + Salesforce Login\" file was placed on your"
+  printf '%s\n'   "Desktop — double-click it any time you need to log in again.${RESET}"
   printf '\n%s\n' "${DIM}Setup log: ${LOG_FILE}${RESET}"
 }
 
@@ -388,6 +445,7 @@ main() {
   install_java
   install_extensions
 
+  launch_logins_and_vscode
   print_next_steps
   log "=== Setup finished OK $(date) ==="
 }
