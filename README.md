@@ -27,31 +27,28 @@ already present is detected and skipped. It supports both **Apple Silicon**
 2. Paste this single line and press Enter:
 
    ```bash
-   curl -fsSL https://YOUR-HOST/install.sh | bash
+   curl -fsSL https://raw.githubusercontent.com/Kelley-Austin/claude-code-salesforce-setup/main/install.sh | bash
    ```
 
 3. When asked, type your **Mac password** (it won't show as you type — that's normal).
 4. Wait. It takes about 10–20 minutes.
 5. Follow the two final on-screen logins (Claude + Salesforce).
 
-> Replace `https://YOUR-HOST/install.sh` with wherever you host the script
-> (see **Hosting** below).
-
 ## Hosting the one-liner
 
-The `curl … | bash` approach needs the script reachable at a stable URL.
-Pick whichever fits your company:
+This installer is hosted publicly in this repository, so the raw URL works for
+everyone with no authentication:
 
-- **GitHub (raw file)** — simplest. Push `install.sh`, then use the raw URL:
-  ```
-  https://raw.githubusercontent.com/<org>/<repo>/main/install.sh
-  ```
-  Tip: a short link (e.g. company URL shortener) makes it friendlier to paste.
+```
+https://raw.githubusercontent.com/Kelley-Austin/claude-code-salesforce-setup/main/install.sh
+```
 
-- **Internal web server / S3 bucket** — upload `install.sh` and serve it over HTTPS.
+To **update the installer for everyone**, just commit a new `install.sh` to
+`main` — users always fetch the latest version on their next run. No
+redistribution needed; the one-liner stays the same.
 
-To update the installer for everyone, just replace the hosted file — users always
-fetch the latest version on their next run.
+> Tip: a short link (e.g. a company URL shortener pointing at the raw URL)
+> makes it friendlier to paste.
 
 ## What the script does NOT do (on purpose)
 
