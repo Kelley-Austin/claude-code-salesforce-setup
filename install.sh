@@ -210,6 +210,18 @@ brew_ensure() {
 
 install_node() {
   step "Node.js (runtime for Claude Code)"
+  # Respect an existing Node (even one installed outside Homebrew, e.g. from
+  # nodejs.org or nvm) as long as it is recent enough. Avoids a conflicting
+  # second copy.
+  if have node; then
+    local major
+    major="$(node -v 2>/dev/null | sed -E 's/v([0-9]+).*/\1/')"
+    if [ "${major:-0}" -ge 18 ] 2>/dev/null; then
+      ok "Node.js already installed ($(node -v)) — keeping your existing version."
+      return 0
+    fi
+    warn "Found Node.js $(node -v), older than v18. Installing a newer one via Homebrew."
+  fi
   brew_ensure formula node "Node.js"
   load_brew_env || true
 }
@@ -233,10 +245,17 @@ install_claude_code() {
 
 install_vscode() {
   step "Visual Studio Code (editor)"
-  brew_ensure cask visual-studio-code "Visual Studio Code"
-  # Ensure the 'code' command-line launcher is available.
+  local app="/Applications/Visual Studio Code.app"
+  # If VS Code was already installed manually (dragged into Applications),
+  # keep it instead of letting Homebrew error on the existing app.
+  if [ -d "$app" ]; then
+    ok "Visual Studio Code already present — keeping your existing copy."
+  else
+    brew_ensure cask visual-studio-code "Visual Studio Code"
+  fi
+  # Ensure the 'code' command-line launcher is available for this session.
   if ! have code; then
-    local code_bin="/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"
+    local code_bin="${app}/Contents/Resources/app/bin/code"
     if [ -x "$code_bin" ]; then
       export PATH="$PATH:$(dirname "$code_bin")"
     fi
