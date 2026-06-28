@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# Logs produced by the installer
+*.log
+
+# Editor / scratch
+.vscode/
+.idea/
+*.swp
