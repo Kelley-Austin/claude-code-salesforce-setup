@@ -25,7 +25,7 @@ set -o pipefail
 # ----------------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------------
-SCRIPT_VERSION="1.3.0"
+SCRIPT_VERSION="1.4.0"
 LOG_FILE="${HOME}/Library/Logs/claude-salesforce-setup.log"
 REQUIRED_MACOS_MAJOR=13   # macOS Ventura or newer
 
@@ -369,103 +369,151 @@ export PATH
 clear
 cat <<'TXT'
 ============================================================
-   Final setup — logins and (optionally) your project
+   Claude Code + Salesforce — guided setup
 ============================================================
+   Each step below is optional — pick what you need.
 TXT
 
-# ---------------- 1) Salesforce login ----------------
+# ---------------- 1) Salesforce connection ----------------
+ORG=""            # alias/username of the chosen org ("" = use the CLI default)
+ORG_CONNECTED=0   # becomes 1 once we have a usable org
 echo
-echo "1) Salesforce login"
-echo "   Which kind of org are you connecting to?"
-echo
-echo "     [1] Production / Developer    (login.salesforce.com)"
-echo "     [2] Sandbox                   (test.salesforce.com)"
-echo "     [3] Custom domain / My Domain (you'll paste the URL)"
-echo
-SF_INSTANCE=""
-while true; do
-  printf "   Type 1, 2 or 3 and press Enter: "
-  read -r choice
-  case "$choice" in
-    1) SF_INSTANCE="https://login.salesforce.com"; break ;;
-    2) SF_INSTANCE="https://test.salesforce.com";  break ;;
-    3)
-       echo
-       echo "   Paste your org URL. Examples:"
-       echo "     mycompany.my.salesforce.com"
-       echo "     https://mycompany.sandbox.my.salesforce.com"
-       printf "   URL: "
-       read -r url
-       case "$url" in
-         http://*|https://*) : ;;
-         *) url="https://$url" ;;
-       esac
-       SF_INSTANCE="$url"; break ;;
-    *) echo "   Please type 1, 2 or 3." ;;
-  esac
-done
-echo
-echo "   Opening the browser to log in to Salesforce..."
-sf org login web --instance-url "$SF_INSTANCE" --set-default
-SF_LOGIN_STATUS=$?
-echo
-
-# ---------------- 2) Optional project + metadata retrieve ----------------
-PROJECT_DIR=""
-if [ "$SF_LOGIN_STATUS" -ne 0 ]; then
-  echo "   Salesforce login did not complete — skipping project creation."
-else
-  echo "------------------------------------------------------------"
-  echo "2) Create a project folder and download your org's metadata?"
-  printf "   Do this now? [Y/n]: "
-  read -r want
-  case "$want" in
-    [Nn]*) echo "   Skipped — you can create a project later." ;;
-    *)
-      name=""
-      while [ -z "$name" ]; do
-        printf "   Project folder name (will be saved in Documents): "
-        read -r raw
-        name="$(printf '%s' "$raw" | tr ' ' '-' | tr -cd 'A-Za-z0-9._-')"
-        if [ -z "$name" ]; then
-          echo "   Please type a valid name (letters, numbers, - or _)."
-        elif [ -e "$HOME/Documents/$name" ]; then
-          echo "   A folder named '$name' already exists in Documents — pick another."
-          name=""
-        fi
-      done
+echo "1) Salesforce connection"
+while [ "$ORG_CONNECTED" -eq 0 ]; do
+  echo
+  echo "   [1] Use an org you're already logged into"
+  echo "   [2] Log in to a new org"
+  echo "   [3] Skip Salesforce for now"
+  printf "   Choose 1, 2 or 3: "
+  read -r conn
+  case "$conn" in
+    1)
       echo
-      echo "   Creating project '$name' in Documents..."
-      if sf project generate --name "$name" --output-dir "$HOME/Documents"; then
-        PROJECT_DIR="$HOME/Documents/$name"
-        cd "$PROJECT_DIR" || PROJECT_DIR=""
-      fi
-      if [ -n "$PROJECT_DIR" ]; then
-        echo
-        echo "   Building a starter manifest (Apex, LWC, Aura, Objects, Flows, ...)..."
-        sf project generate manifest \
-          --metadata ApexClass ApexTrigger ApexPage ApexComponent \
-                     LightningComponentBundle AuraDefinitionBundle \
-                     CustomObject Flow Layout PermissionSet \
-                     CustomTab CustomApplication StaticResource \
-          --name package --output-dir manifest
-        echo
-        echo "   Downloading metadata from your org (this can take a few minutes)..."
-        sf project retrieve start --manifest manifest/package.xml
-        echo
-        echo "   Done — your project is at: $PROJECT_DIR"
+      echo "   Orgs you're already connected to:"
+      echo "   ----------------------------------------------------------"
+      sf org list
+      echo "   ----------------------------------------------------------"
+      printf "   Type the alias or username to use (blank to go back): "
+      read -r picked
+      [ -z "$picked" ] && continue
+      if sf org display --target-org "$picked" >/dev/null 2>&1; then
+        ORG="$picked"; ORG_CONNECTED=1
+        echo "   Using org: $ORG"
       else
-        echo "   Could not create the project. You can try again later."
+        echo "   Couldn't find a connected org called '$picked'. Try again."
       fi
       ;;
+    2)
+      echo
+      echo "   Which kind of org are you connecting to?"
+      echo "     [1] Production / Developer    (login.salesforce.com)"
+      echo "     [2] Sandbox                   (test.salesforce.com)"
+      echo "     [3] Custom domain / My Domain (you'll paste the URL)"
+      SF_INSTANCE=""
+      while [ -z "$SF_INSTANCE" ]; do
+        printf "   Type 1, 2 or 3: "
+        read -r kind
+        case "$kind" in
+          1) SF_INSTANCE="https://login.salesforce.com" ;;
+          2) SF_INSTANCE="https://test.salesforce.com" ;;
+          3)
+            echo "   Paste your org URL (e.g. mycompany.my.salesforce.com):"
+            printf "   URL: "
+            read -r url
+            case "$url" in http://*|https://*) : ;; *) url="https://$url" ;; esac
+            SF_INSTANCE="$url"
+            ;;
+          *) echo "   Please type 1, 2 or 3." ;;
+        esac
+      done
+      echo
+      echo "   Opening the browser to log in to Salesforce..."
+      if sf org login web --instance-url "$SF_INSTANCE" --set-default; then
+        ORG=""; ORG_CONNECTED=1   # the default org is now set
+        echo "   Logged in."
+      else
+        echo "   Login did not complete. Try again."
+      fi
+      ;;
+    3)
+      echo "   Skipping Salesforce for now."
+      break
+      ;;
+    *) echo "   Please choose 1, 2 or 3." ;;
   esac
-fi
+done
 
-# ---------------- 3) Open VS Code ----------------
+# Build the org flag for sf commands (empty when using the CLI default).
+ORG_ARGS=()
+[ -n "$ORG" ] && ORG_ARGS=(--target-org "$ORG")
+
+# ---------------- 2) Project folder (optional) ----------------
+PROJECT_DIR=""
+echo
+echo "------------------------------------------------------------"
+echo "2) Create a local project folder?"
+printf "   Create one now? [Y/n]: "
+read -r want_proj
+case "$want_proj" in
+  [Nn]*) echo "   Skipped." ;;
+  *)
+    name=""
+    while [ -z "$name" ]; do
+      printf "   Project folder name (saved in Documents): "
+      read -r raw
+      name="$(printf '%s' "$raw" | tr ' ' '-' | tr -cd 'A-Za-z0-9._-')"
+      if [ -z "$name" ]; then
+        echo "   Please type a valid name (letters, numbers, - or _)."
+      elif [ -e "$HOME/Documents/$name" ]; then
+        echo "   A folder named '$name' already exists in Documents — pick another."
+        name=""
+      fi
+    done
+    echo
+    echo "   Creating project '$name' in Documents..."
+    if sf project generate --name "$name" --output-dir "$HOME/Documents"; then
+      PROJECT_DIR="$HOME/Documents/$name"
+      cd "$PROJECT_DIR" || PROJECT_DIR=""
+    fi
+    if [ -z "$PROJECT_DIR" ]; then
+      echo "   Could not create the project."
+    else
+      # Remember the chosen org as this project's default (handy in VS Code).
+      [ -n "$ORG" ] && sf config set target-org "$ORG" >/dev/null 2>&1
+
+      # ---------------- 3) Metadata retrieve (optional) ----------------
+      if [ "$ORG_CONNECTED" -eq 1 ]; then
+        printf "   Download your org's metadata into this project now? [Y/n]: "
+        read -r want_md
+        case "$want_md" in
+          [Nn]*) echo "   Skipped — empty project created. You can retrieve later." ;;
+          *)
+            echo "   Building a starter manifest (Apex, LWC, Aura, Objects, Flows, ...)..."
+            sf project generate manifest \
+              --metadata ApexClass ApexTrigger ApexPage ApexComponent \
+                         LightningComponentBundle AuraDefinitionBundle \
+                         CustomObject Flow Layout PermissionSet \
+                         CustomTab CustomApplication StaticResource \
+              --name package --output-dir manifest
+            echo
+            echo "   Downloading metadata (this can take a few minutes)..."
+            sf project retrieve start --manifest manifest/package.xml "${ORG_ARGS[@]}"
+            ;;
+        esac
+      else
+        echo "   No Salesforce org connected — skipping metadata download."
+      fi
+      echo
+      echo "   Project ready at: $PROJECT_DIR"
+    fi
+    ;;
+esac
+
+# ---------------- 4) Open VS Code ----------------
 echo
 if command -v code >/dev/null 2>&1; then
   if [ -n "$PROJECT_DIR" ]; then
-    echo "Opening VS Code in your new project..."
+    echo "Opening VS Code in your project..."
     code "$PROJECT_DIR"
   else
     echo "Opening VS Code..."
@@ -475,11 +523,11 @@ else
   open -a "Visual Studio Code" 2>/dev/null
 fi
 
-# ---------------- 4) Claude login ----------------
+# ---------------- 5) Claude ----------------
 echo
 echo "------------------------------------------------------------"
-echo "3) Signing in to Claude..."
-echo "   A browser window will open — approve the login."
+echo "3) Starting Claude..."
+echo "   If asked, approve the login in your browser."
 echo "   Claude will then start; you can begin typing or close this window."
 echo "   (Signing in here also signs in the Claude extension in VS Code.)"
 echo "------------------------------------------------------------"
@@ -506,11 +554,12 @@ print_next_steps() {
   printf '%s\n'   "${BOLD}${GREEN}└──────────────────────────────────────────────────────┘${RESET}"
 
   if [ "${LOGINS_AUTOLAUNCHED:-0}" = "1" ]; then
-    printf '\n%s\n' "${BOLD}A new Terminal window just opened to guide you through:${RESET}"
-    printf '%s\n'   "  • signing in to Salesforce (pick Production / Sandbox / Custom),"
-    printf '%s\n'   "  • optionally creating a project in Documents and downloading metadata,"
-    printf '%s\n'   "  • opening VS Code, and signing in to Claude."
-    printf '%s\n'   "Just follow that window. Signing in to Claude there also signs in the"
+    printf '\n%s\n' "${BOLD}A new Terminal window just opened with a step-by-step menu:${RESET}"
+    printf '%s\n'   "  • Salesforce: use an existing org, log in to a new one, or skip,"
+    printf '%s\n'   "  • optionally create a project in Documents,"
+    printf '%s\n'   "  • optionally download (retrieve) the org's metadata,"
+    printf '%s\n'   "  • open VS Code, and start Claude."
+    printf '%s\n'   "Each step is optional. Signing in to Claude there also signs in the"
     printf '%s\n'   "VS Code extension."
   else
     printf '\n%s\n' "${BOLD}A few one-time steps remain:${RESET}"

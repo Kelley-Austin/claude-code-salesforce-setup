@@ -53,32 +53,37 @@ redistribution needed; the one-liner stays the same.
 
 ## Guided setup window (auto-launched)
 
-When everything is installed, the script opens a fresh Terminal window that
-guides the user through the rest — no commands to type or remember:
+When everything is installed, the script opens a fresh Terminal window with a
+**step-by-step menu**. Every step is optional, so users pick only what they need:
 
-1. **Salesforce login** — asks which org type they're connecting to
-   (**Production**, **Sandbox**, or **Custom domain**, where they paste their
-   My Domain URL), then opens the browser with the correct endpoint
-   (`sf org login web --instance-url … --set-default`).
+1. **Salesforce connection** — choose one:
+   - **Use an org you're already logged into** — lists connected orgs
+     (`sf org list`); the user types the alias/username to use.
+   - **Log in to a new org** — asks the org type (**Production**, **Sandbox**, or
+     **Custom domain**, where they paste the My Domain URL) and runs
+     `sf org login web --instance-url … --set-default`.
+   - **Skip Salesforce for now.**
 
-2. **Project + metadata (optional)** — asks `Create a project and download your
-   org's metadata now? [Y/n]`. If yes, it:
-   - asks for a **folder name** and creates the project in **`~/Documents`**
-     (`sf project generate`),
-   - builds a **starter `manifest/package.xml`** covering the common types
-     (Apex classes/triggers, Visualforce, LWC, Aura, Custom Objects, Flows,
-     Layouts, Permission Sets, Tabs, Apps, Static Resources),
-   - **downloads** them with `sf project retrieve start --manifest manifest/package.xml`.
+2. **Create a project folder?** `[Y/n]` — if yes, asks for a name and creates the
+   project in **`~/Documents`** (`sf project generate`). The chosen org is saved
+   as the project's default.
 
-3. **Opens VS Code** — in the new project folder if one was created (otherwise a
-   plain window). The Claude Code extension loads here.
+3. **Download (retrieve) the org's metadata?** `[Y/n]` — only offered when an org
+   is connected and a project was created. If yes, it builds a starter
+   `manifest/package.xml` (Apex classes/triggers, Visualforce, LWC, Aura, Custom
+   Objects, Flows, Layouts, Permission Sets, Tabs, Apps, Static Resources) and
+   runs `sf project retrieve start`. Choosing **no** leaves an empty project you
+   can retrieve into later.
 
-4. **Claude login** (`claude`) — opens the browser to sign in. This also signs in
-   the VS Code extension (shared credentials).
+4. **Opens VS Code** — in the new project folder if one was created, otherwise a
+   plain window. The Claude Code extension loads here.
+
+5. **Starts Claude** (`claude`) — opens the browser to sign in if needed. This
+   also signs in the VS Code extension (shared credentials).
 
 A reusable **"Finish Claude + Salesforce Setup.command"** file is left on the
-Desktop, so anyone can re-run the logins or spin up another project with a
-double-click.
+Desktop, so anyone can re-run any of these steps (log in, create another project,
+retrieve) with a double-click.
 
 > Why a separate Terminal window? Those tools need a real interactive terminal,
 > which a piped `curl | bash` cannot provide — so the script launches one.
