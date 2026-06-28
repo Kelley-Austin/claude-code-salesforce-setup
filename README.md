@@ -32,7 +32,8 @@ already present is detected and skipped. It supports both **Apple Silicon**
 
 3. When asked, type your **Mac password** (it won't show as you type — that's normal).
 4. Wait. It takes about 10–20 minutes.
-5. Follow the two final on-screen logins (Claude + Salesforce).
+5. At the end, VS Code opens automatically and a new Terminal window pops up
+   to guide the two browser logins (Salesforce, then Claude). Just follow it.
 
 ## Hosting the one-liner
 
@@ -50,14 +51,21 @@ redistribution needed; the one-liner stays the same.
 > Tip: a short link (e.g. a company URL shortener pointing at the raw URL)
 > makes it friendlier to paste.
 
-## What the script does NOT do (on purpose)
+## The two logins (auto-launched)
 
-Two steps require the actual person and cannot be safely automated:
+When everything is installed, the script:
 
-- **Claude Code login** — opens a browser to authenticate the user's account.
-- **Salesforce org login** — opens a browser to connect their org.
+1. **Opens VS Code** — the Claude Code extension loads and shares the login below.
+2. **Opens a fresh Terminal window** that runs the two browser logins for the user:
+   - **Salesforce** (`sf org login web`) — opens the browser to connect their org.
+   - **Claude** (`claude`) — opens the browser to sign in to their account.
 
-The installer finishes by printing clear, copy-paste instructions for both.
+The user only has to click through the browser prompts — no commands to type or
+remember. A reusable **"Finish Claude + Salesforce Login.command"** file is also
+left on the Desktop, so anyone can re-run the logins later with a double-click.
+
+> Why a separate Terminal window? Those tools need a real interactive terminal,
+> which a piped `curl | bash` cannot provide — so the script launches one for them.
 
 ## Troubleshooting
 
