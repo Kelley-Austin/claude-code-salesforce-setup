@@ -25,7 +25,7 @@ set -o pipefail
 # ----------------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------------
-SCRIPT_VERSION="1.5.0"
+SCRIPT_VERSION="1.6.0"
 LOG_FILE="${HOME}/Library/Logs/claude-salesforce-setup.log"
 REQUIRED_MACOS_MAJOR=13   # macOS Ventura or newer
 
@@ -55,18 +55,26 @@ err()   { printf '%s\n' "  ${RED}✗ $*${RESET}" >&2; log "ERROR: $*"; }
 
 step() {
   CURRENT_STEP=$((CURRENT_STEP + 1))
-  printf '\n%s\n' "${BOLD}${BLUE}[${CURRENT_STEP}/${TOTAL_STEPS}] $*${RESET}"
-  log "STEP ${CURRENT_STEP}/${TOTAL_STEPS}: $*"
+  local title="$1" bar="" i pct filled
+  pct=$(( CURRENT_STEP * 100 / TOTAL_STEPS ))
+  filled=$(( CURRENT_STEP * 24 / TOTAL_STEPS ))
+  i=0; while [ "$i" -lt "$filled" ];   do bar="${bar}█"; i=$((i + 1)); done
+  i=$filled; while [ "$i" -lt 24 ];     do bar="${bar}░"; i=$((i + 1)); done
+  printf '\n%s\n' "${BOLD}${BLUE}▸  Step ${CURRENT_STEP}/${TOTAL_STEPS}${RESET}   ${BOLD}${title}${RESET}"
+  printf '%s\n'   "   ${CYAN}${bar}${RESET} ${DIM}${pct}%${RESET}"
+  log "STEP ${CURRENT_STEP}/${TOTAL_STEPS}: $title"
 }
 
 banner() {
-  printf '%s\n' "${BOLD}${CYAN}"
-  cat <<'EOF'
-  ┌──────────────────────────────────────────────────────┐
-  │   Claude Code for Salesforce — Mac Setup Assistant     │
-  └──────────────────────────────────────────────────────┘
-EOF
-  printf '%s\n' "${RESET}${DIM}  Version ${SCRIPT_VERSION} — this may take 10–20 minutes.${RESET}"
+  printf '\n'
+  printf '%s\n' "${BOLD}${CYAN}      ██╗  ██╗  █████╗ ${RESET}"
+  printf '%s\n' "${BOLD}${CYAN}      ██║ ██╔╝ ██╔══██╗${RESET}    ${BOLD}KA Setup Assistant${RESET}"
+  printf '%s\n' "${BOLD}${CYAN}      █████╔╝  ███████║${RESET}    ${DIM}Kelley-Austin${RESET}"
+  printf '%s\n' "${BOLD}${CYAN}      ██╔═██╗  ██╔══██║${RESET}"
+  printf '%s\n' "${BOLD}${CYAN}      ██║  ██╗ ██║  ██║${RESET}    ${DIM}Claude Code + Salesforce installer${RESET}"
+  printf '%s\n' "${BOLD}${CYAN}      ╚═╝  ╚═╝ ╚═╝  ╚═╝${RESET}    ${DIM}macOS · v${SCRIPT_VERSION}${RESET}"
+  printf '\n'
+  printf '%s\n' "${BLUE}  ────────────────────────────────────────────────────────────${RESET}"
 }
 
 die() {
@@ -404,19 +412,25 @@ if ! command -v code >/dev/null 2>&1; then
 fi
 export PATH
 
+# Colors + a small section helper for this window.
+B=$'\033[1m'; D=$'\033[2m'; R=$'\033[0m'
+C=$'\033[36m'; BL=$'\033[34m'; G=$'\033[32m'; Y=$'\033[33m'
+section(){ printf '\n%s\n%s\n' "${BL}${B}$1${R}" "${BL}  ──────────────────────────────────────────────────────${R}"; }
+
 clear
-cat <<'TXT'
-============================================================
-   Claude Code + Salesforce — guided setup
-============================================================
-   Each step below is optional — pick what you need.
-TXT
+printf '\n'
+printf '%s\n' "${B}${C}     ██╗  ██╗  █████╗ ${R}"
+printf '%s\n' "${B}${C}     ██║ ██╔╝ ██╔══██╗${R}   ${B}KA Setup Assistant${R}"
+printf '%s\n' "${B}${C}     █████╔╝  ███████║${R}   ${D}Guided setup${R}"
+printf '%s\n' "${B}${C}     ██╔═██╗  ██╔══██║${R}"
+printf '%s\n' "${B}${C}     ██║  ██╗ ██║  ██║${R}   ${D}Salesforce login · project · VS Code · Claude${R}"
+printf '%s\n' "${B}${C}     ╚═╝  ╚═╝ ╚═╝  ╚═╝${R}"
+printf '\n%s\n' "   ${D}Every step below is optional — pick what you need.${R}"
 
 # ---------------- 1) Salesforce connection ----------------
 ORG=""            # alias/username of the chosen org ("" = use the CLI default)
 ORG_CONNECTED=0   # becomes 1 once we have a usable org
-echo
-echo "1) Salesforce connection"
+section "1)  Salesforce connection"
 while [ "$ORG_CONNECTED" -eq 0 ]; do
   echo
   echo "   [1] Use an org you're already logged into"
@@ -521,9 +535,7 @@ ORG_ARGS=()
 
 # ---------------- 2) Project folder (optional) ----------------
 PROJECT_DIR=""
-echo
-echo "------------------------------------------------------------"
-echo "2) Create a local project folder?"
+section "2)  Create a local project folder?"
 printf "   Create one now? [Y/n]: "
 read -r want_proj
 case "$want_proj" in
@@ -581,14 +593,14 @@ case "$want_proj" in
     ;;
 esac
 
-# ---------------- 4) Open VS Code ----------------
-echo
+# ---------------- Open VS Code ----------------
+section "Opening VS Code"
 if command -v code >/dev/null 2>&1; then
   if [ -n "$PROJECT_DIR" ]; then
-    echo "Opening VS Code in your project..."
+    echo "   ${G}✓${R} Launching VS Code in your project..."
     code "$PROJECT_DIR"
   else
-    echo "Opening VS Code..."
+    echo "   ${G}✓${R} Launching VS Code..."
     code
   fi
 else
@@ -596,13 +608,10 @@ else
 fi
 
 # ---------------- 5) Claude ----------------
-echo
-echo "------------------------------------------------------------"
-echo "3) Starting Claude..."
+section "3)  Starting Claude"
 echo "   If asked, approve the login in your browser."
 echo "   Claude will then start; you can begin typing or close this window."
-echo "   (Signing in here also signs in the Claude extension in VS Code.)"
-echo "------------------------------------------------------------"
+echo "   ${D}(Signing in here also signs in the Claude extension in VS Code.)${R}"
 echo
 [ -n "$PROJECT_DIR" ] && cd "$PROJECT_DIR"
 claude
@@ -621,9 +630,9 @@ EOS
 # Final summary & next steps
 # ----------------------------------------------------------------------------
 print_next_steps() {
-  printf '\n%s\n' "${BOLD}${GREEN}┌──────────────────────────────────────────────────────┐${RESET}"
-  printf '%s\n'   "${BOLD}${GREEN}│   All done! Everything is installed. 🎉                │${RESET}"
-  printf '%s\n'   "${BOLD}${GREEN}└──────────────────────────────────────────────────────┘${RESET}"
+  printf '\n%s\n' "${GREEN}  ════════════════════════════════════════════════════════════${RESET}"
+  printf '%s\n'   "   ${BOLD}${GREEN}✓  All set — everything is installed!${RESET}   ${DIM}🎉${RESET}"
+  printf '%s\n'   "${GREEN}  ════════════════════════════════════════════════════════════${RESET}"
 
   if [ "${LOGINS_AUTOLAUNCHED:-0}" = "1" ]; then
     printf '\n%s\n' "${BOLD}A new Terminal window just opened with a step-by-step menu:${RESET}"
@@ -655,9 +664,10 @@ main() {
   check_macos
 
   banner
-  printf '\n%s\n' "Detected: ${BOLD}${CHIP}${RESET} Mac, macOS $(sw_vers -productVersion)."
-  printf '%s\n'   "This will install the full Claude Code + Salesforce toolkit."
-  if ! ask_yes_no "Continue?"; then
+  printf '%s\n'   "  ${DIM}Detected${RESET}  ${BOLD}${CHIP}${RESET} Mac · macOS $(sw_vers -productVersion)"
+  printf '%s\n'   "  ${DIM}Installs${RESET}  Homebrew · Node · Claude Code · VS Code · Salesforce CLI · Java"
+  printf '%s\n' "${BLUE}  ────────────────────────────────────────────────────────────${RESET}"
+  if ! ask_yes_no "  Ready to start?"; then
     printf '%s\n' "Cancelled. Nothing was changed."
     exit 0
   fi
