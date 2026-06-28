@@ -25,7 +25,7 @@ set -o pipefail
 # ----------------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------------
-SCRIPT_VERSION="1.7.0"
+SCRIPT_VERSION="1.7.1"
 LOG_FILE="${HOME}/Library/Logs/claude-salesforce-setup.log"
 REQUIRED_MACOS_MAJOR=13   # macOS Ventura or newer
 
@@ -397,6 +397,9 @@ launch_logins_and_vscode() {
   printf '\n%s\n' "${BOLD}${BLUE}Finishing up — opening the guided setup window...${RESET}"
 
   local helper="${HOME}/Desktop/Finish Claude + Salesforce Setup.command"
+  # Remove any older copies first (incl. the previous "...Login.command" name)
+  # so the Desktop never accumulates duplicates.
+  rm -f "${HOME}/Desktop/Finish Claude"*".command" 2>/dev/null || true
   cat > "$helper" <<'EOS'
 #!/bin/bash
 # Make the freshly installed tools available in this new window (a .command
