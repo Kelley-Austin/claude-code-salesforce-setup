@@ -143,6 +143,35 @@ persist_brew_path() {
   done
 }
 
+# Whether the current user is a macOS Administrator (can use sudo).
+is_admin() {
+  id -Gn 2>/dev/null | tr ' ' '\n' | grep -qx admin
+}
+
+# Cache sudo credentials up front. Homebrew's NONINTERACTIVE installer checks
+# for sudo access non-interactively, which fails under 'curl | bash' because
+# stdin is the script, not the keyboard. We read the password from the real
+# terminal (/dev/tty) and start a background keep-alive so the credentials do
+# not expire mid-install.
+SUDO_KEEPALIVE_PID=""
+prime_sudo() {
+  if ! sudo -n true 2>/dev/null; then
+    [ -e /dev/tty ] || return 1
+    info "Administrator access is required to install Homebrew."
+    info "Please type your Mac password (nothing shows as you type), then press Enter."
+    local i
+    for i in 1 2 3; do
+      if sudo -v < /dev/tty; then break; fi
+      [ "$i" -eq 3 ] && return 1
+      warn "That didn't work — try again."
+    done
+  fi
+  # Keep the sudo timestamp fresh until this script exits.
+  ( while kill -0 "$$" 2>/dev/null; do sudo -n true 2>/dev/null; sleep 50; done ) &
+  SUDO_KEEPALIVE_PID=$!
+  return 0
+}
+
 # ----------------------------------------------------------------------------
 # Installation steps
 # ----------------------------------------------------------------------------
@@ -175,7 +204,16 @@ install_homebrew() {
   if load_brew_env && have brew; then
     ok "Already installed."
   else
-    info "Installing Homebrew (you may be asked for your Mac password)..."
+    if ! is_admin; then
+      die "Your macOS account '${USER}' is not an Administrator, which is required
+  to install Homebrew. Ask your IT team to grant admin rights to this account
+  (or run the installer on an admin account), then try again."
+    fi
+    if ! prime_sudo; then
+      die "Could not obtain administrator access (wrong password, or this account
+  lacks admin rights). Confirm your account is an Administrator and try again."
+    fi
+    info "Installing Homebrew..."
     NONINTERACTIVE=1 /bin/bash -c \
       "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
       >>"$LOG_FILE" 2>&1 || die "Homebrew installation failed. See log."
