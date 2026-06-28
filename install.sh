@@ -25,7 +25,7 @@ set -o pipefail
 # ----------------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------------
-SCRIPT_VERSION="1.4.0"
+SCRIPT_VERSION="1.5.0"
 LOG_FILE="${HOME}/Library/Logs/claude-salesforce-setup.log"
 REQUIRED_MACOS_MAJOR=13   # macOS Ventura or newer
 
@@ -340,6 +340,44 @@ install_extensions() {
 }
 
 # ----------------------------------------------------------------------------
+# Configure VS Code so company projects open ready to use
+# ----------------------------------------------------------------------------
+# The Salesforce extensions only work in a "trusted" workspace. By default VS
+# Code shows a Workspace Trust prompt and opens untrusted folders in Restricted
+# Mode (extensions disabled) — a dead end for a non-technical user. We turn the
+# prompt off so projects open trusted. Done with Node (already installed) to
+# safely MERGE into settings.json instead of clobbering it.
+configure_vscode_trust() {
+  have node || return 0
+  printf '\n%s\n' "${BOLD}${BLUE}Configuring VS Code (open projects without the trust prompt)...${RESET}"
+  local settings="${HOME}/Library/Application Support/Code/User/settings.json"
+  local js; js="$(mktemp -t vstrust).js"
+  cat > "$js" <<'NODE'
+const fs = require('fs');
+const path = require('path');
+const p = process.argv[2];
+let raw = '';
+try { raw = fs.readFileSync(p, 'utf8'); } catch (e) {}
+// Tolerate JSONC (settings.json may contain // and /* */ comments).
+const txt = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').trim();
+let obj = {};
+if (txt) {
+  try { obj = JSON.parse(txt); }
+  catch (e) { try { fs.copyFileSync(p, p + '.backup'); } catch (_) {} } // keep a backup if unparseable
+}
+obj['security.workspace.trust.enabled'] = false;
+fs.mkdirSync(path.dirname(p), { recursive: true });
+fs.writeFileSync(p, JSON.stringify(obj, null, 2) + '\n');
+NODE
+  if node "$js" "$settings" >>"$LOG_FILE" 2>&1; then
+    ok "VS Code will open company projects directly (no trust prompt)."
+  else
+    warn "Couldn't preconfigure VS Code trust (a one-time 'trust' prompt may appear)."
+  fi
+  rm -f "$js"
+}
+
+# ----------------------------------------------------------------------------
 # Auto-launch: a guided window for logins, project creation and VS Code
 # ----------------------------------------------------------------------------
 # The Salesforce/Claude logins and the metadata retrieve all need a REAL
@@ -389,18 +427,52 @@ while [ "$ORG_CONNECTED" -eq 0 ]; do
   case "$conn" in
     1)
       echo
-      echo "   Orgs you're already connected to:"
-      echo "   ----------------------------------------------------------"
-      sf org list
-      echo "   ----------------------------------------------------------"
-      printf "   Type the alias or username to use (blank to go back): "
-      read -r picked
-      [ -z "$picked" ] && continue
-      if sf org display --target-org "$picked" >/dev/null 2>&1; then
-        ORG="$picked"; ORG_CONNECTED=1
-        echo "   Using org: $ORG"
+      echo "   Reading your connected orgs..."
+      ORG_LINES=""
+      if command -v node >/dev/null 2>&1; then
+        ORG_LINES="$(sf org list --json 2>/dev/null | node -e '
+let d="";process.stdin.on("data",x=>d+=x);process.stdin.on("end",()=>{
+let j;try{j=JSON.parse(d)}catch(e){process.exit(0)}
+const r=(j&&j.result)||{};const seen=new Set();const out=[];
+for(const k of Object.keys(r)){const a=r[k];if(Array.isArray(a)){for(const o of a){
+if(o&&o.username&&!seen.has(o.username)){seen.add(o.username);out.push((o.alias||"")+"\u001f"+o.username);}}}}
+process.stdout.write(out.join("\n"));})')"
+      fi
+      if [ -n "$ORG_LINES" ]; then
+        ORG_ALIASES=(); ORG_USERS=(); ORG_LABELS=(); idx=0
+        while IFS=$(printf '\037') read -r a u; do
+          [ -z "$u" ] && continue
+          idx=$((idx+1)); ORG_ALIASES[$idx]="$a"; ORG_USERS[$idx]="$u"
+          if [ -n "$a" ]; then ORG_LABELS[$idx]="$a  ($u)"; else ORG_LABELS[$idx]="$u"; fi
+        done <<EOF
+$ORG_LINES
+EOF
+        echo
+        echo "   Your connected orgs:"
+        n=1; while [ "$n" -le "$idx" ]; do printf "     [%s] %s\n" "$n" "${ORG_LABELS[$n]}"; n=$((n+1)); done
+        printf "   Type the number to use (blank to go back): "
+        read -r num
+        [ -z "$num" ] && continue
+        case "$num" in *[!0-9]*) echo "   Please type a number."; continue ;; esac
+        if [ "$num" -ge 1 ] && [ "$num" -le "$idx" ]; then
+          ORG="${ORG_ALIASES[$num]}"; [ -z "$ORG" ] && ORG="${ORG_USERS[$num]}"
+          ORG_CONNECTED=1; echo "   Using org: ${ORG_LABELS[$num]}"
+        else
+          echo "   That number isn't on the list. Try again."
+        fi
       else
-        echo "   Couldn't find a connected org called '$picked'. Try again."
+        # Fallback (no Node, or no orgs parsed): show the list and type it.
+        echo "   ----------------------------------------------------------"
+        sf org list
+        echo "   ----------------------------------------------------------"
+        printf "   Type the alias or username to use (blank to go back): "
+        read -r picked
+        [ -z "$picked" ] && continue
+        if sf org display --target-org "$picked" >/dev/null 2>&1; then
+          ORG="$picked"; ORG_CONNECTED=1; echo "   Using org: $ORG"
+        else
+          echo "   Couldn't find a connected org called '$picked'. Try again."
+        fi
       fi
       ;;
     2)
@@ -598,6 +670,7 @@ main() {
   install_salesforce_cli
   install_java
   install_extensions
+  configure_vscode_trust
 
   launch_logins_and_vscode
   print_next_steps

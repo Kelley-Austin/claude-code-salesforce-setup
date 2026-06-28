@@ -57,8 +57,8 @@ When everything is installed, the script opens a fresh Terminal window with a
 **step-by-step menu**. Every step is optional, so users pick only what they need:
 
 1. **Salesforce connection** — choose one:
-   - **Use an org you're already logged into** — lists connected orgs
-     (`sf org list`); the user types the alias/username to use.
+   - **Use an org you're already logged into** — shows a **numbered list** of the
+     connected orgs; the user just types the number (no alias/username to type).
    - **Log in to a new org** — asks the org type (**Production**, **Sandbox**, or
      **Custom domain**, where they paste the My Domain URL) and runs
      `sf org login web --instance-url … --set-default`.
@@ -76,7 +76,10 @@ When everything is installed, the script opens a fresh Terminal window with a
    can retrieve into later.
 
 4. **Opens VS Code** — in the new project folder if one was created, otherwise a
-   plain window. The Claude Code extension loads here.
+   plain window. The Claude Code extension loads here. The installer also turns
+   off VS Code's *Workspace Trust* prompt (`security.workspace.trust.enabled:
+   false`) so company projects open ready to use instead of in Restricted Mode
+   (where the Salesforce extensions would be disabled).
 
 5. **Starts Claude** (`claude`) — opens the browser to sign in if needed. This
    also signs in the VS Code extension (shared credentials).
