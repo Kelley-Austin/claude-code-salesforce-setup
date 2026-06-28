@@ -51,24 +51,37 @@ redistribution needed; the one-liner stays the same.
 > Tip: a short link (e.g. a company URL shortener pointing at the raw URL)
 > makes it friendlier to paste.
 
-## The two logins (auto-launched)
+## Guided setup window (auto-launched)
 
-When everything is installed, the script:
+When everything is installed, the script opens a fresh Terminal window that
+guides the user through the rest — no commands to type or remember:
 
-1. **Opens VS Code** — the Claude Code extension loads and shares the login below.
-2. **Opens a fresh Terminal window** that runs the two browser logins for the user:
-   - **Salesforce** — first asks which org type they're connecting to
-     (**Production**, **Sandbox**, or **Custom domain** — where they paste their
-     My Domain URL), then opens the browser with the correct endpoint
-     (`sf org login web --instance-url …`).
-   - **Claude** (`claude`) — opens the browser to sign in to their account.
+1. **Salesforce login** — asks which org type they're connecting to
+   (**Production**, **Sandbox**, or **Custom domain**, where they paste their
+   My Domain URL), then opens the browser with the correct endpoint
+   (`sf org login web --instance-url … --set-default`).
 
-The user only has to click through the browser prompts — no commands to type or
-remember. A reusable **"Finish Claude + Salesforce Login.command"** file is also
-left on the Desktop, so anyone can re-run the logins later with a double-click.
+2. **Project + metadata (optional)** — asks `Create a project and download your
+   org's metadata now? [Y/n]`. If yes, it:
+   - asks for a **folder name** and creates the project in **`~/Documents`**
+     (`sf project generate`),
+   - builds a **starter `manifest/package.xml`** covering the common types
+     (Apex classes/triggers, Visualforce, LWC, Aura, Custom Objects, Flows,
+     Layouts, Permission Sets, Tabs, Apps, Static Resources),
+   - **downloads** them with `sf project retrieve start --manifest manifest/package.xml`.
+
+3. **Opens VS Code** — in the new project folder if one was created (otherwise a
+   plain window). The Claude Code extension loads here.
+
+4. **Claude login** (`claude`) — opens the browser to sign in. This also signs in
+   the VS Code extension (shared credentials).
+
+A reusable **"Finish Claude + Salesforce Setup.command"** file is left on the
+Desktop, so anyone can re-run the logins or spin up another project with a
+double-click.
 
 > Why a separate Terminal window? Those tools need a real interactive terminal,
-> which a piped `curl | bash` cannot provide — so the script launches one for them.
+> which a piped `curl | bash` cannot provide — so the script launches one.
 
 ## Troubleshooting
 

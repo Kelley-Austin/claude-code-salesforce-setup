@@ -25,7 +25,7 @@ set -o pipefail
 # ----------------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------------
-SCRIPT_VERSION="1.2.0"
+SCRIPT_VERSION="1.3.0"
 LOG_FILE="${HOME}/Library/Logs/claude-salesforce-setup.log"
 REQUIRED_MACOS_MAJOR=13   # macOS Ventura or newer
 
@@ -340,41 +340,46 @@ install_extensions() {
 }
 
 # ----------------------------------------------------------------------------
-# Auto-launch: open VS Code + guide the two browser logins
+# Auto-launch: a guided window for logins, project creation and VS Code
 # ----------------------------------------------------------------------------
-# The Salesforce and Claude logins both open a browser, but they need a REAL
+# The Salesforce/Claude logins and the metadata retrieve all need a REAL
 # interactive terminal — which a 'curl | bash' pipe doesn't provide. So we drop
-# a small ".command" launcher on the Desktop and open it: macOS runs it in a
-# fresh Terminal window with a proper TTY. Bonus: the file stays on the Desktop
-# as a reusable "redo my logins" button.
+# a ".command" launcher on the Desktop and open it: macOS runs it in a fresh
+# Terminal window with a proper TTY. It also stays on the Desktop as a reusable
+# "do my setup again" button.
 launch_logins_and_vscode() {
-  printf '\n%s\n' "${BOLD}${BLUE}Finishing up — opening VS Code and the login window...${RESET}"
+  printf '\n%s\n' "${BOLD}${BLUE}Finishing up — opening the guided setup window...${RESET}"
 
-  # 1) Open VS Code so the Claude Code extension loads. It shares the login
-  #    done below, so it ends up signed in automatically.
-  if have code; then
-    code >/dev/null 2>&1 || open -a "Visual Studio Code" >/dev/null 2>&1 || true
-  else
-    open -a "Visual Studio Code" >/dev/null 2>&1 || true
-  fi
-  ok "Visual Studio Code opened."
-
-  # 2) Write and open the interactive login helper.
-  local helper="${HOME}/Desktop/Finish Claude + Salesforce Login.command"
+  local helper="${HOME}/Desktop/Finish Claude + Salesforce Setup.command"
   cat > "$helper" <<'EOS'
 #!/bin/bash
+# Make the freshly installed tools available in this new window (a .command
+# file does not always inherit the PATH set up in the shell profile).
+for p in /opt/homebrew/bin /usr/local/bin "$HOME/.gh-cli/bin"; do
+  [ -d "$p" ] && case ":$PATH:" in *":$p:"*) ;; *) PATH="$p:$PATH";; esac
+done
+[ -x /opt/homebrew/bin/brew ] && eval "$(/opt/homebrew/bin/brew shellenv)"
+[ -x /usr/local/bin/brew ]    && eval "$(/usr/local/bin/brew shellenv)"
+if ! command -v code >/dev/null 2>&1; then
+  CODE_BIN="/Applications/Visual Studio Code.app/Contents/Resources/app/bin"
+  [ -d "$CODE_BIN" ] && PATH="$PATH:$CODE_BIN"
+fi
+export PATH
+
 clear
 cat <<'TXT'
 ============================================================
-   Final step — two quick logins (your browser will open)
+   Final setup — logins and (optionally) your project
 ============================================================
 TXT
+
+# ---------------- 1) Salesforce login ----------------
 echo
 echo "1) Salesforce login"
 echo "   Which kind of org are you connecting to?"
 echo
-echo "     [1] Production / Developer   (login.salesforce.com)"
-echo "     [2] Sandbox                  (test.salesforce.com)"
+echo "     [1] Production / Developer    (login.salesforce.com)"
+echo "     [2] Sandbox                   (test.salesforce.com)"
 echo "     [3] Custom domain / My Domain (you'll paste the URL)"
 echo
 SF_INSTANCE=""
@@ -402,22 +407,92 @@ done
 echo
 echo "   Opening the browser to log in to Salesforce..."
 sf org login web --instance-url "$SF_INSTANCE" --set-default
+SF_LOGIN_STATUS=$?
+echo
+
+# ---------------- 2) Optional project + metadata retrieve ----------------
+PROJECT_DIR=""
+if [ "$SF_LOGIN_STATUS" -ne 0 ]; then
+  echo "   Salesforce login did not complete — skipping project creation."
+else
+  echo "------------------------------------------------------------"
+  echo "2) Create a project folder and download your org's metadata?"
+  printf "   Do this now? [Y/n]: "
+  read -r want
+  case "$want" in
+    [Nn]*) echo "   Skipped — you can create a project later." ;;
+    *)
+      name=""
+      while [ -z "$name" ]; do
+        printf "   Project folder name (will be saved in Documents): "
+        read -r raw
+        name="$(printf '%s' "$raw" | tr ' ' '-' | tr -cd 'A-Za-z0-9._-')"
+        if [ -z "$name" ]; then
+          echo "   Please type a valid name (letters, numbers, - or _)."
+        elif [ -e "$HOME/Documents/$name" ]; then
+          echo "   A folder named '$name' already exists in Documents — pick another."
+          name=""
+        fi
+      done
+      echo
+      echo "   Creating project '$name' in Documents..."
+      if sf project generate --name "$name" --output-dir "$HOME/Documents"; then
+        PROJECT_DIR="$HOME/Documents/$name"
+        cd "$PROJECT_DIR" || PROJECT_DIR=""
+      fi
+      if [ -n "$PROJECT_DIR" ]; then
+        echo
+        echo "   Building a starter manifest (Apex, LWC, Aura, Objects, Flows, ...)..."
+        sf project generate manifest \
+          --metadata ApexClass ApexTrigger ApexPage ApexComponent \
+                     LightningComponentBundle AuraDefinitionBundle \
+                     CustomObject Flow Layout PermissionSet \
+                     CustomTab CustomApplication StaticResource \
+          --name package --output-dir manifest
+        echo
+        echo "   Downloading metadata from your org (this can take a few minutes)..."
+        sf project retrieve start --manifest manifest/package.xml
+        echo
+        echo "   Done — your project is at: $PROJECT_DIR"
+      else
+        echo "   Could not create the project. You can try again later."
+      fi
+      ;;
+  esac
+fi
+
+# ---------------- 3) Open VS Code ----------------
+echo
+if command -v code >/dev/null 2>&1; then
+  if [ -n "$PROJECT_DIR" ]; then
+    echo "Opening VS Code in your new project..."
+    code "$PROJECT_DIR"
+  else
+    echo "Opening VS Code..."
+    code
+  fi
+else
+  open -a "Visual Studio Code" 2>/dev/null
+fi
+
+# ---------------- 4) Claude login ----------------
 echo
 echo "------------------------------------------------------------"
-echo "2) Signing in to Claude..."
+echo "3) Signing in to Claude..."
 echo "   A browser window will open — approve the login."
-echo "   Claude will then start. You can begin typing, or just close"
-echo "   this window — you're already set up in VS Code."
+echo "   Claude will then start; you can begin typing or close this window."
+echo "   (Signing in here also signs in the Claude extension in VS Code.)"
 echo "------------------------------------------------------------"
 echo
+[ -n "$PROJECT_DIR" ] && cd "$PROJECT_DIR"
 claude
 EOS
   chmod +x "$helper"
   if open "$helper" >/dev/null 2>&1; then
-    ok "A new Terminal window opened to finish the two logins."
+    ok "A new Terminal window opened to finish setup (logins + project)."
     LOGINS_AUTOLAUNCHED=1
   else
-    warn "Could not auto-open the login window — do the logins manually (steps below)."
+    warn "Could not auto-open the setup window — do the steps manually (below)."
     LOGINS_AUTOLAUNCHED=0
   fi
 }
@@ -431,18 +506,20 @@ print_next_steps() {
   printf '%s\n'   "${BOLD}${GREEN}└──────────────────────────────────────────────────────┘${RESET}"
 
   if [ "${LOGINS_AUTOLAUNCHED:-0}" = "1" ]; then
-    printf '\n%s\n' "${BOLD}VS Code is open, and a new Terminal window is guiding you through${RESET}"
-    printf '%s\n'   "${BOLD}the two browser logins (Salesforce, then Claude).${RESET}"
-    printf '%s\n'   "Just follow that window. Once Claude is signed in, the VS Code"
-    printf '%s\n'   "extension is signed in too."
+    printf '\n%s\n' "${BOLD}A new Terminal window just opened to guide you through:${RESET}"
+    printf '%s\n'   "  • signing in to Salesforce (pick Production / Sandbox / Custom),"
+    printf '%s\n'   "  • optionally creating a project in Documents and downloading metadata,"
+    printf '%s\n'   "  • opening VS Code, and signing in to Claude."
+    printf '%s\n'   "Just follow that window. Signing in to Claude there also signs in the"
+    printf '%s\n'   "VS Code extension."
   else
-    printf '\n%s\n' "${BOLD}Two quick one-time logins remain:${RESET}"
+    printf '\n%s\n' "${BOLD}A few one-time steps remain:${RESET}"
     printf '\n%s\n' "${BOLD}1) Connect your Salesforce org${RESET} — in a new Terminal type:  ${CYAN}sf org login web${RESET}"
     printf '%s\n'   "${BOLD}2) Sign in to Claude${RESET} — then type:  ${CYAN}claude${RESET}"
   fi
 
-  printf '\n%s\n' "${DIM}Tip: a \"Finish Claude + Salesforce Login\" file was placed on your"
-  printf '%s\n'   "Desktop — double-click it any time you need to log in again.${RESET}"
+  printf '\n%s\n' "${DIM}Tip: a \"Finish Claude + Salesforce Setup\" file was placed on your"
+  printf '%s\n'   "Desktop — double-click it any time to log in or create another project.${RESET}"
   printf '\n%s\n' "${DIM}Setup log: ${LOG_FILE}${RESET}"
 }
 
