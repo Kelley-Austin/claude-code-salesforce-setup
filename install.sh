@@ -25,7 +25,7 @@ set -o pipefail
 # ----------------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------------
-SCRIPT_VERSION="1.6.0"
+SCRIPT_VERSION="1.7.0"
 LOG_FILE="${HOME}/Library/Logs/claude-salesforce-setup.log"
 REQUIRED_MACOS_MAJOR=13   # macOS Ventura or newer
 
@@ -444,26 +444,41 @@ while [ "$ORG_CONNECTED" -eq 0 ]; do
       echo "   Reading your connected orgs..."
       ORG_LINES=""
       if command -v node >/dev/null 2>&1; then
-        ORG_LINES="$(sf org list --json 2>/dev/null | node -e '
-let d="";process.stdin.on("data",x=>d+=x);process.stdin.on("end",()=>{
-let j;try{j=JSON.parse(d)}catch(e){process.exit(0)}
-const r=(j&&j.result)||{};const seen=new Set();const out=[];
-for(const k of Object.keys(r)){const a=r[k];if(Array.isArray(a)){for(const o of a){
-if(o&&o.username&&!seen.has(o.username)){seen.add(o.username);out.push((o.alias||"")+"\u001f"+o.username);}}}}
-process.stdout.write(out.join("\n"));})')"
+        ORG_LINES="$(sf org list --json 2>/dev/null | node -e 'let d="";process.stdin.on("data",x=>d+=x);process.stdin.on("end",()=>{let j;try{j=JSON.parse(d)}catch(e){process.exit(0)}const r=(j&&j.result)||{};const seen=new Set();const out=[];for(const k of Object.keys(r)){const arr=r[k];if(Array.isArray(arr)){for(const o of arr){if(o&&o.username&&!seen.has(o.username)){seen.add(o.username);const t=o.isScratch?"Scratch":(o.isSandbox?"Sandbox":(o.isDevHub?"Dev Hub":"Production"));out.push(o.alias||"");out.push(o.username);out.push(t);}}}}process.stdout.write(out.join(String.fromCharCode(10)));})')"
       fi
       if [ -n "$ORG_LINES" ]; then
-        ORG_ALIASES=(); ORG_USERS=(); ORG_LABELS=(); idx=0
-        while IFS=$(printf '\037') read -r a u; do
-          [ -z "$u" ] && continue
-          idx=$((idx+1)); ORG_ALIASES[$idx]="$a"; ORG_USERS[$idx]="$u"
-          if [ -n "$a" ]; then ORG_LABELS[$idx]="$a  ($u)"; else ORG_LABELS[$idx]="$u"; fi
-        done <<EOF
+        ORG_ALIASES=(); ORG_USERS=(); ORG_TYPES=(); ORG_LABELS=(); LINES=(); idx=0
+        while IFS= read -r line; do LINES+=("$line"); done <<EOF
 $ORG_LINES
 EOF
+        total=${#LINES[@]}; i=0
+        while [ "$i" -lt "$total" ]; do
+          a="${LINES[$i]}"; u="${LINES[$((i+1))]}"; t="${LINES[$((i+2))]}"; i=$((i+3))
+          [ -z "$u" ] && continue
+          idx=$((idx+1)); ORG_ALIASES[$idx]="$a"; ORG_USERS[$idx]="$u"; ORG_TYPES[$idx]="$t"
+          if [ -n "$a" ]; then ORG_LABELS[$idx]="$a ($u)"; else ORG_LABELS[$idx]="$u"; fi
+        done
+        if [ "$idx" -eq 0 ]; then
+          echo "   You are not logged into any orgs yet. Choose option 2 to log in."
+          continue
+        fi
+        rule(){ s=""; i=0; while [ "$i" -lt "$1" ]; do s="${s}─"; i=$((i+1)); done; printf '%s' "$s"; }
+        d1=$(rule 5); d2=$(rule 18); d3=$(rule 38); d4=$(rule 12)
         echo
-        echo "   Your connected orgs:"
-        n=1; while [ "$n" -le "$idx" ]; do printf "     [%s] %s\n" "$n" "${ORG_LABELS[$n]}"; n=$((n+1)); done
+        echo "   ${B}Your connected orgs${R}"
+        echo "   ${D}┌${d1}┬${d2}┬${d3}┬${d4}┐${R}"
+        hdr=$(printf '   │ %-3s │ %-16s │ %-36s │ %-10s │' "#" "Alias" "Username" "Type")
+        echo "${B}${hdr}${R}"
+        echo "   ${D}├${d1}┼${d2}┼${d3}┼${d4}┤${R}"
+        n=1
+        while [ "$n" -le "$idx" ]; do
+          al="${ORG_ALIASES[$n]}"; [ -z "$al" ] && al="-"
+          row=$(printf '   │ %-3s │ %-16.16s │ %-36.36s │ %-10.10s │' "$n" "$al" "${ORG_USERS[$n]}" "${ORG_TYPES[$n]}")
+          echo "$row"
+          n=$((n+1))
+        done
+        echo "   ${D}└${d1}┴${d2}┴${d3}┴${d4}┘${R}"
+        echo
         printf "   Type the number to use (blank to go back): "
         read -r num
         [ -z "$num" ] && continue
@@ -472,10 +487,9 @@ EOF
           ORG="${ORG_ALIASES[$num]}"; [ -z "$ORG" ] && ORG="${ORG_USERS[$num]}"
           ORG_CONNECTED=1; echo "   Using org: ${ORG_LABELS[$num]}"
         else
-          echo "   That number isn't on the list. Try again."
+          echo "   That number is not on the list. Try again."
         fi
       else
-        # Fallback (no Node, or no orgs parsed): show the list and type it.
         echo "   ----------------------------------------------------------"
         sf org list
         echo "   ----------------------------------------------------------"
@@ -485,7 +499,7 @@ EOF
         if sf org display --target-org "$picked" >/dev/null 2>&1; then
           ORG="$picked"; ORG_CONNECTED=1; echo "   Using org: $ORG"
         else
-          echo "   Couldn't find a connected org called '$picked'. Try again."
+          echo "   Could not find a connected org called '$picked'. Try again."
         fi
       fi
       ;;

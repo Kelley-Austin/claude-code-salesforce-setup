@@ -57,8 +57,9 @@ When everything is installed, the script opens a fresh Terminal window with a
 **step-by-step menu**. Every step is optional, so users pick only what they need:
 
 1. **Salesforce connection** — choose one:
-   - **Use an org you're already logged into** — shows a **numbered list** of the
-     connected orgs; the user just types the number (no alias/username to type).
+   - **Use an org you're already logged into** — shows the connected orgs in a
+     **bordered table** (#, Alias, Username, Type); the user just types the row
+     number (no alias/username to type).
    - **Log in to a new org** — asks the org type (**Production**, **Sandbox**, or
      **Custom domain**, where they paste the My Domain URL) and runs
      `sf org login web --instance-url … --set-default`.
