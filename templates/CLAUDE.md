@@ -21,6 +21,31 @@ Follow every rule below in every session.
   against the project's actual metadata (the `force-app` folder / a retrieve).
 - When you're unsure, **ask** instead of guessing.
 
+## Before changing, overwriting, or shipping anything
+
+- **Always show a diff/summary before you push or deploy.** List exactly what
+  will change (files, metadata components, and the **target org**), then wait for
+  the user's explicit "go ahead." Never push or deploy silently.
+- **Detect and announce overwrites.** Before replacing or modifying anything that
+  already exists — a file, a metadata component, a field, a record — check whether
+  it exists, tell the user **precisely what will be overwritten**, and ask before
+  proceeding. Never overwrite or delete something you didn't create without
+  surfacing it first.
+- **Back up before risky or irreversible changes.** Make a safety copy first and
+  tell the user where it is:
+  - retrieve the current metadata before overwriting it,
+  - export the affected records before a bulk update/delete,
+  - copy a file before replacing it.
+  Prefer a clearly named backup (e.g. `backups/<name>-<context>.bak`).
+- **Treat sensitive items with extra care** (credentials, named credentials,
+  connected apps, certificates, permission sets/profiles, sharing settings). Back
+  them up, double-check, and never expose their secret values in output, logs, or
+  commits.
+- **Confirm scope before bulk actions.** State how many records/components are
+  affected and which org, and get confirmation before running it.
+- **Make changes reversible.** Keep edits small and atomic so they're easy to roll
+  back, and tell the user how to undo what you just did.
+
 ## Salesforce & Apex best practices
 
 ### Bulkification & governor limits
