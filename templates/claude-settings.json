@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "ask": [
+      "Bash(sf project deploy:*)",
+      "Bash(sf project delete:*)",
+      "Bash(sf data delete:*)",
+      "Bash(sf data update:*)",
+      "Bash(sf data upsert:*)",
+      "Bash(sf data import:*)",
+      "Bash(sf org delete:*)",
+      "Bash(sf apex run:*)",
+      "Bash(rm:*)",
+      "Bash(git push:*)",
+      "Bash(git reset:*)",
+      "Bash(git rebase:*)"
+    ]
+  }
+}

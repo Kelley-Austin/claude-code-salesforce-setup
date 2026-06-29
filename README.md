@@ -85,6 +85,28 @@ When everything is installed, the script opens a fresh Terminal window with a
 5. **Starts Claude** (`claude`) — opens the browser to sign in if needed. This
    also signs in the VS Code extension (shared credentials).
 
+When a project is created, the installer also drops in **guard-rails** so Claude
+behaves safely by default (see below).
+
+## Best-practice guard-rails (per project)
+
+Every project the installer creates starts with two files so Claude follows the
+company's standards automatically — no setup by the user:
+
+- **`CLAUDE.md`** (project root) — Claude auto-loads this every session. It holds
+  Salesforce best practices (bulkification, governor limits, CRUD/FLS security,
+  trigger handler pattern, meaningful tests, LWC over Aura, validate before
+  deploying to production) plus general practices (no committed secrets, atomic
+  commits, run tests before done, explain changes in plain language, ask before
+  anything destructive).
+- **`.claude/settings.json`** — sets `permissions.ask` so Claude **prompts for
+  confirmation before risky commands**: deploys, metadata/record deletes, `sf
+  apex run`, `rm`, `git push/reset/rebase`.
+
+Both come from [`templates/`](templates/) in this repo. **Edit the templates here
+to update the guidelines for every future project** — the installer downloads the
+latest copies at project-creation time.
+
 A reusable **"Finish Claude + Salesforce Setup.command"** file is left on the
 Desktop, so anyone can re-run any of these steps (log in, create another project,
 retrieve) with a double-click.

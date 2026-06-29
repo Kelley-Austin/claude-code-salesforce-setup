@@ -25,7 +25,7 @@ set -o pipefail
 # ----------------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------------
-SCRIPT_VERSION="1.7.1"
+SCRIPT_VERSION="1.8.0"
 LOG_FILE="${HOME}/Library/Logs/claude-salesforce-setup.log"
 REQUIRED_MACOS_MAJOR=13   # macOS Ventura or newer
 
@@ -581,6 +581,23 @@ case "$want_proj" in
     else
       # Remember the chosen org as this project's default (handy in VS Code).
       [ -n "$ORG" ] && sf config set target-org "$ORG" >/dev/null 2>&1
+
+      # Add best-practice guard-rails so Claude follows them by default:
+      # a CLAUDE.md (guidelines) and .claude/settings.json (ask before
+      # dangerous commands). Downloaded from the company template repo.
+      KA_RAW="https://raw.githubusercontent.com/Kelley-Austin/claude-code-salesforce-setup/main/templates"
+      echo "   Adding best-practice guard-rails..."
+      if curl -fsSL "$KA_RAW/CLAUDE.md" -o "$PROJECT_DIR/CLAUDE.md" 2>/dev/null; then
+        echo "   ${G}✓${R} CLAUDE.md (best-practice guidelines)"
+      else
+        echo "   ${Y}!${R} Could not download CLAUDE.md (skipped)."
+      fi
+      mkdir -p "$PROJECT_DIR/.claude"
+      if curl -fsSL "$KA_RAW/claude-settings.json" -o "$PROJECT_DIR/.claude/settings.json" 2>/dev/null; then
+        echo "   ${G}✓${R} Safety settings (asks before risky commands)"
+      else
+        echo "   ${Y}!${R} Could not download safety settings (skipped)."
+      fi
 
       # ---------------- 3) Metadata retrieve (optional) ----------------
       if [ "$ORG_CONNECTED" -eq 1 ]; then
